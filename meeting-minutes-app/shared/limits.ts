@@ -11,20 +11,16 @@ export const MAX_AUDIO_BYTES = 120 * 1024 * 1024;
 
 export const ALLOWED_EXTENSIONS = [".mp3", ".wav", ".m4a", ".mp4"] as const;
 
-/** 브라우저가 MIME 을 못 알아내면 빈 문자열이 오므로 확장자 검증과 함께 쓴다. */
-export const ALLOWED_MIME_TYPES = [
-  "audio/mpeg",
-  "audio/mp3",
-  "audio/wav",
-  "audio/x-wav",
-  "audio/wave",
-  "audio/vnd.wave",
-  "audio/x-m4a",
-  "audio/m4a",
-  "audio/mp4",
-  "audio/aac",
-  "video/mp4",
-] as const;
+/**
+ * MIME 은 브라우저·OS 마다 제각각이라(예: 안드로이드의 m4a 는 audio/mp4a-latm, audio/mp4, audio/x-m4a,
+ * 못 알아내면 빈 문자열 또는 application/octet-stream) 허용 목록으로 막으면 정상 녹음이 거부된다.
+ * 판단 기준은 확장자이고, 실제로 오디오인지는 브라우저 변환과 서버의 MP3 검증이 확인한다.
+ * MIME 은 audio/*, video/*, 또는 "모름" 표시일 때만 통과시킨다.
+ */
+export function isPlausibleMediaMime(mime: string): boolean {
+  const m = mime.trim().toLowerCase();
+  return m === "" || m.startsWith("audio/") || m.startsWith("video/") || m === "application/octet-stream" || m === "application/mp4";
+}
 
 export const LANGUAGES = [
   { code: "ko", label: "한국어" },

@@ -166,10 +166,17 @@ describe("업로드 요청 검증", () => {
     expect(parseCreateUpload({ ...ok, mimeType: "" }).mimeType).toBe("");
     for (const f of ["a.MP3", "a.wav", "a.m4a", "a.MP4"]) expect(() => parseCreateUpload({ ...ok, fileName: f, mimeType: "" })).not.toThrow();
   });
+  it("기기마다 다른 m4a MIME 을 모두 받아들인다 (확장자가 기준)", () => {
+    for (const mimeType of ["audio/x-m4a", "audio/m4a", "audio/mp4", "audio/mp4a-latm", "audio/aac", "audio/3gpp", "video/mp4", "application/octet-stream", "application/mp4", ""]) {
+      expect(() => parseCreateUpload({ ...ok, fileName: "녹음.m4a", mimeType }), mimeType || "(빈 값)").not.toThrow();
+    }
+  });
   it("허용되지 않은 확장자·MIME 을 막는다", () => {
     expect(fail({ ...ok, fileName: "virus.exe" })).toContain("지원하지 않는 파일 형식");
     expect(fail({ ...ok, fileName: "noext" })).toContain("지원하지 않는 파일 형식");
     expect(fail({ ...ok, mimeType: "application/x-msdownload" })).toContain("지원하지 않는 파일 형식");
+    expect(fail({ ...ok, mimeType: "text/html" })).toContain("지원하지 않는 파일 형식");
+    expect(fail({ ...ok, fileName: "녹음.ogg", mimeType: "audio/ogg" })).toContain("지원하지 않는 파일 형식"); // MIME 이 좋아도 확장자가 기준
   });
   it("200MB 초과를 막는다 (정확히 200MB 는 통과)", () => {
     expect(() => parseCreateUpload({ ...ok, sizeBytes: 200 * 1024 * 1024 })).not.toThrow();

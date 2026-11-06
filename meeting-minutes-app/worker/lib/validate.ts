@@ -2,7 +2,7 @@ import { z } from "zod";
 import { isValidYmd } from "../../shared/calendar";
 import {
   ALLOWED_EXTENSIONS,
-  ALLOWED_MIME_TYPES,
+  isPlausibleMediaMime,
   LANGUAGES,
   MAX_AUDIO_BYTES,
   MAX_UPLOAD_BYTES,
@@ -11,7 +11,6 @@ import type { CreateUploadRequest } from "../../shared/types";
 import { ApiError } from "./errors";
 
 const langCodes = LANGUAGES.map((l) => l.code) as [string, ...string[]];
-const mimeSet = new Set<string>(ALLOWED_MIME_TYPES);
 
 const schema = z.object({
   fileName: z.string().min(1, "파일 이름이 없습니다").max(255, "파일 이름이 너무 깁니다"),
@@ -34,8 +33,8 @@ export function parseCreateUpload(body: unknown): CreateUploadRequest {
   if (!(ALLOWED_EXTENSIONS as readonly string[]).includes(ext)) {
     throw new ApiError(400, `지원하지 않는 파일 형식입니다. ${ALLOWED_EXTENSIONS.join(", ")} 파일만 올릴 수 있어요`);
   }
-  // 브라우저가 MIME 을 모르면 빈 문자열을 보낸다 — 그땐 확장자만 믿는다.
-  if (v.mimeType && !mimeSet.has(v.mimeType.toLowerCase())) {
+  // MIME 은 참고용: 오디오·영상이 아니라고 분명한 경우만 거른다 (안드로이드 audio/mp4a-latm 등을 허용해야 한다)
+  if (!isPlausibleMediaMime(v.mimeType)) {
     throw new ApiError(400, `지원하지 않는 파일 형식입니다 (${v.mimeType})`);
   }
   if (v.sizeBytes > MAX_UPLOAD_BYTES) {
