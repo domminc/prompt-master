@@ -1,0 +1,45 @@
+{
+  "name": "meeting-minutes-app",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "회의·강의 음성/영상 AI 요약 웹앱 (회의록 + 일정 추출)",
+  "scripts": {
+    "dev:web": "vite",
+    "dev:worker": "wrangler dev",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.worker.json",
+    "test": "vitest run",
+    "deploy": "npm run build && wrangler deploy",
+    "db:migrate": "node scripts/migrate.mjs",
+    "smoke": "node scripts/dev/smoke.mjs",
+    "mock:ai": "node scripts/dev/mock-ai.mjs",
+    "e2e:browser": "node scripts/dev/e2e-browser.cjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.6.0",
+    "@ffmpeg/ffmpeg": "0.12.15",
+    "@ffmpeg/util": "0.12.2",
+    "aws4fetch": "^1.0.20",
+    "hono": "^4.6.0",
+    "lucide-react": "^0.468.0",
+    "postgres": "^3.4.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261104.1",
+    "@ffmpeg/core": "0.12.10",
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/node": "^26.6.6",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0",
+    "vitest": "^2.1.8",
+    "wrangler": "^4.0.0"
+  }
+}

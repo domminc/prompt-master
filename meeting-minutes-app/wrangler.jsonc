@@ -1,0 +1,43 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "meeting-minutes",
+  "main": "worker/index.ts",
+  "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  // 프론트엔드(React) 정적 파일. /api/* 만 Worker 가 먼저 처리한다.
+  "assets": {
+    "directory": "./dist/client",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+
+  // R2: 추출된 오디오(uploads/{jobId}/audio.mp3)와 내보내기 캐시(exports/{jobId}/...)
+  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "meeting-minutes" }],
+
+  // Neon Postgres 는 반드시 Hyperdrive 로 접근한다.
+  //   npx wrangler hyperdrive create meeting-db --connection-string="postgres://..."
+  // 출력된 id 를 아래에 넣는다. 로컬 개발은 localConnectionString 사용.
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "00000000000000000000000000000000",
+      "localConnectionString": "postgres://postgres:postgres@127.0.0.1:5432/meeting"
+    }
+  ],
+
+  // 긴 작업(전사·요약)은 Cloudflare Workflows 로 분리: 단계별 재시도 + 내구성
+  "workflows": [
+    { "name": "meeting-pipeline", "binding": "PIPELINE", "class_name": "MeetingPipeline" }
+  ],
+
+  // 비밀이 아닌 설정. 비밀(API 키 등)은 `wrangler secret put` 으로만 등록한다.
+  "vars": {
+    "R2_BUCKET_NAME": "meeting-minutes",
+    "WHISPER_BASE_URL": "https://api.openai.com/v1",
+    "WHISPER_MODEL": "whisper-1",
+    "LLM_MODEL": "claude-opus-5-5",
+    "CHUNK_SECONDS": "600"
+  }
+}
