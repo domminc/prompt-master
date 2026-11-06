@@ -3,7 +3,7 @@
 //   1) 로컬 Postgres + schema 적용   2) node scripts/dev/mock-ai.mjs   3) npx wrangler dev   (.dev.vars 는 mock 을 가리키게)
 //   node scripts/dev/smoke.mjs
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -125,6 +125,22 @@ const ics = await exp("ics");
 check("ICS: 시간 일정 + 종일 마감 일정, CRLF", ics.text.includes("DTSTART;TZID=Asia/Seoul:20261110T150000") && ics.text.includes("DTSTART;VALUE=DATE:20261130") && ics.text.includes("\r\n") && ics.r.headers.get("content-type")?.startsWith("text/calendar"));
 await new Promise((r) => setTimeout(r, 500));
 const srt2 = await exp("srt"); check("두 번째 요청(R2 캐시)도 같은 내용", srt2.text === srt.text);
+// Word(.docx): workerd 런타임에서 실제로 만들어지고, 열 수 있는 ZIP 이며, 두 가지 버전(요약본 / 대화록 포함)이 따로 캐시된다
+const DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const docxGet = async (q = "") => { const r = await fetch(`${API}/api/jobs/${main.jobId}/export?format=docx${q}`); return { r, buf: Buffer.from(await r.arrayBuffer()) }; };
+const docxXml = (buf, name) => { const f = path.join(dir, `t-${Math.random().toString(36).slice(2)}.docx`); writeFileSync(f, buf); return execFileSync("unzip", ["-p", f, name]).toString(); };
+const dx = await docxGet();
+check("DOCX: 200 + Content-Type(wordprocessingml) + ZIP 시그니처(PK)", dx.r.status === 200 && dx.r.headers.get("content-type") === DOCX_TYPE && dx.buf.subarray(0, 2).toString() === "PK", `${dx.r.status} ${dx.r.headers.get("content-type")}`);
+check("DOCX: 한글 파일명 .docx 로 다운로드", /filename\*=UTF-8''.*\.docx$/.test(dx.r.headers.get("content-disposition") ?? ""), dx.r.headers.get("content-disposition"));
+const dxXml = docxXml(dx.buf, "word/document.xml");
+check("DOCX 본문: 제목·일정(날짜·시간·장소)·액션 아이템·결정사항", ["주간 회의 통합 회의록", "2026년 11월 6일 (금)", "2차 디자인 리뷰", "2026-11-10 (화)", "15:00", "3층 회의실", "QA 체크리스트 작성", "민수", "연말 정산 서류 제출", "종일"].every((t) => dxXml.includes(t)));
+check("DOCX 기본본은 대화록 부록 없음", !dxXml.includes("부록. 대화록"));
+const dxFull = await docxGet("&transcript=1");
+const fullXml = docxXml(dxFull.buf, "word/document.xml");
+check("DOCX 대화록 포함본: 부록 + 90개 발언 타임스탬프, 파일명에 (대화록 포함)", dxFull.buf.length > dx.buf.length && fullXml.includes("부록. 대화록") && (fullXml.match(/\[\d\d:\d\d:\d\d\]/g) ?? []).length === 90 && decodeURIComponent(dxFull.r.headers.get("content-disposition") ?? "").includes("(대화록 포함).docx"), `${dxFull.buf.length} vs ${dx.buf.length}`);
+await new Promise((r) => setTimeout(r, 600));
+const dx2 = await docxGet(); const dxFull2 = await docxGet("&transcript=1");
+check("DOCX 두 번째 요청(R2 바이너리 캐시)도 바이트까지 동일, 두 버전이 섞이지 않음", dx2.buf.equals(dx.buf) && dxFull2.buf.equals(dxFull.buf) && !dx2.buf.equals(dxFull2.buf));
 check("잘못된 format → 400", (await j("GET", `/api/jobs/${main.jobId}/export?format=exe`)).status === 400);
 const full = await fetch(`${API}/api/jobs/${main.jobId}/media`);
 check("미디어 전체: 200, audio/mpeg, Accept-Ranges", full.status === 200 && full.headers.get("content-type") === "audio/mpeg" && full.headers.get("accept-ranges") === "bytes" && Number(full.headers.get("content-length")) === audio.length);

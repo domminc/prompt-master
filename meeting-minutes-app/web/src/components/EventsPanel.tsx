@@ -1,5 +1,5 @@
 import { CalendarPlus, CalendarX2, Clock, Download, MapPin, Play, Users } from "lucide-react";
-import { eventTiming, googleCalendarUrl, weekdayKo } from "../../../shared/calendar";
+import { eventTimeLabel, eventTiming, googleCalendarUrl, weekdayKo } from "../../../shared/calendar";
 import { formatClock } from "../../../shared/format";
 import { buildIcs } from "../../../shared/ics";
 import { CONFIDENCE_LABEL, EVENT_KIND_LABEL } from "../../../shared/labels";
@@ -20,13 +20,6 @@ function downloadText(filename: string, text: string, type: string) {
   a.download = filename;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-function timeLabel(ev: MeetingEvent): string | null {
-  const t = eventTiming(ev);
-  if (!t) return ev.time;
-  if (t.allDay) return "종일";
-  return ev.endTime && ev.endTime > t.startTime ? `${t.startTime} ~ ${t.endTime}` : t.startTime;
 }
 
 export function EventsPanel({ events, jobId, meetingTitle, onSeek }: Props) {
@@ -62,7 +55,7 @@ export function EventsPanel({ events, jobId, meetingTitle, onSeek }: Props) {
         <ul className="grid gap-3">
           {events.map((ev, i) => {
             const gcal = googleCalendarUrl(ev, { details: `출처 회의: ${meetingTitle}` });
-            const time = timeLabel(ev);
+            const time = eventTimeLabel(ev);
             return (
               <li key={`${ev.title}-${ev.date}-${i}`} className="rounded-xl border border-slate-200 p-3 sm:p-4">
                 <div className="flex gap-3">

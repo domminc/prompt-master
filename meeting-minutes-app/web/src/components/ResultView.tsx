@@ -1,11 +1,11 @@
 import {
   CalendarDays, Check, CheckCircle2, ChevronDown, CircleHelp, Clock, Copy, Download, FileAudio,
-  ListChecks, Play, Sparkles, Trash2,
+  FileText, ListChecks, Play, Sparkles, Trash2,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatClock, formatDuration, formatTimestamp } from "../../../shared/format";
 import { PRIORITY_LABEL } from "../../../shared/labels";
-import type { ExportFormat, JobDto, Segment } from "../../../shared/types";
+import type { JobDto, Segment } from "../../../shared/types";
 import { api } from "../lib/api";
 import { forgetJob } from "../lib/recent";
 import { longDate, shortDate } from "../lib/dates";
@@ -14,12 +14,19 @@ import { Badge, Button, Card, SectionTitle } from "./ui";
 
 type Tab = "summary" | "events" | "transcript";
 
-const EXPORTS: Array<{ format: ExportFormat; label: string; hint: string }> = [
-  { format: "md", label: "회의록", hint: "Markdown (.md)" },
-  { format: "srt", label: "자막", hint: "SRT (.srt)" },
-  { format: "txt", label: "대화록", hint: "텍스트 (.txt)" },
-  { format: "ics", label: "일정", hint: "캘린더 (.ics)" },
-  { format: "json", label: "전체 데이터", hint: "JSON (.json)" },
+interface ExportItem { label: string; hint: string; href: (id: string) => string }
+
+// Word 문서를 맨 위에: 회의록을 문서로 쓰는 경우가 가장 많다
+const WORD_EXPORTS: ExportItem[] = [
+  { label: "회의록 (Word)", hint: ".docx · 요약·일정·액션", href: (id) => api.exportUrl(id, "docx") },
+  { label: "회의록 + 대화록 (Word)", hint: ".docx · 대화록 부록", href: (id) => api.exportUrl(id, "docx", { transcript: true }) },
+];
+const OTHER_EXPORTS: ExportItem[] = [
+  { label: "회의록", hint: "Markdown (.md)", href: (id) => api.exportUrl(id, "md") },
+  { label: "자막", hint: "SRT (.srt)", href: (id) => api.exportUrl(id, "srt") },
+  { label: "대화록", hint: "텍스트 (.txt)", href: (id) => api.exportUrl(id, "txt") },
+  { label: "일정", hint: "캘린더 (.ics)", href: (id) => api.exportUrl(id, "ics") },
+  { label: "전체 데이터", hint: "JSON (.json)", href: (id) => api.exportUrl(id, "json") },
 ];
 
 /** 현재 재생 위치(ms)에 해당하는 세그먼트 인덱스 (이분 탐색) */
@@ -80,7 +87,14 @@ export function ResultView({ job, navigate }: { job: JobDto; navigate: (to: stri
             {job.fileName && <span className="inline-flex min-w-0 items-center gap-1.5"><FileAudio className="size-4 shrink-0" aria-hidden /><span className="truncate">{job.fileName}</span></span>}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <a
+            href={api.exportUrl(job.id, "docx")}
+            download
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
+          >
+            <FileText className="size-4" aria-hidden /> Word로 저장
+          </a>
           <ExportMenu jobId={job.id} />
           <Button
             variant="ghost"
@@ -270,6 +284,21 @@ function PlayerControls(props: {
   );
 }
 
+function MenuLink({ item, jobId, onPick, accent }: { item: ExportItem; jobId: string; onPick: () => void; accent?: boolean }) {
+  return (
+    <a
+      role="menuitem"
+      href={item.href(jobId)}
+      download
+      onClick={onPick}
+      className={`flex min-h-11 items-center justify-between gap-3 rounded-lg px-3 text-sm hover:bg-slate-50 ${accent ? "bg-indigo-50/60" : ""}`}
+    >
+      <span className="font-semibold text-slate-900">{item.label}</span>
+      <span className="text-xs text-slate-500">{item.hint}</span>
+    </a>
+  );
+}
+
 // ── 내려받기 메뉴 ──────────────────────────────────────────────────
 function ExportMenu({ jobId }: { jobId: string }) {
   const [open, setOpen] = useState(false);
@@ -290,23 +319,17 @@ function ExportMenu({ jobId }: { jobId: string }) {
 
   return (
     <div ref={ref} className="relative">
-      <Button variant="primary" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <Button aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <Download className="size-4" aria-hidden /> 내려받기 <ChevronDown className="size-4" aria-hidden />
       </Button>
       {open && (
-        <div role="menu" className="absolute right-0 z-40 mt-2 w-60 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
-          {EXPORTS.map((x) => (
-            <a
-              key={x.format}
-              role="menuitem"
-              href={api.exportUrl(jobId, x.format)}
-              download
-              onClick={() => setOpen(false)}
-              className="flex min-h-11 items-center justify-between gap-3 rounded-lg px-3 text-sm hover:bg-slate-50"
-            >
-              <span className="font-semibold text-slate-900">{x.label}</span>
-              <span className="text-xs text-slate-500">{x.hint}</span>
-            </a>
+        <div role="menu" className="absolute right-0 z-40 mt-2 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+          {WORD_EXPORTS.map((x) => (
+            <MenuLink key={x.label} item={x} jobId={jobId} onPick={() => setOpen(false)} accent />
+          ))}
+          <div className="my-1 border-t border-slate-100" role="separator" />
+          {OTHER_EXPORTS.map((x) => (
+            <MenuLink key={x.label} item={x} jobId={jobId} onPick={() => setOpen(false)} />
           ))}
           <button
             type="button"

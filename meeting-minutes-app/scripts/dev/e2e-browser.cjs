@@ -167,20 +167,31 @@ const overflow = (page) => page.evaluate(() => document.documentElement.scrollWi
 
   console.log("\n[A5] 내려받기");
   await page.getByRole("button", { name: /내려받기/ }).click();
-  const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("menuitem", { name: /자막/ }).click()]);
+  const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("menuitem", { name: /\.srt/ }).click()]);
   const srtText = fs.readFileSync(await dl.path(), "utf8");
   check("SRT 다운로드: 한글 파일명 + 올바른 형식", dl.suggestedFilename() === "주간 회의 통합 회의록.srt" && srtText.startsWith("1\n00:00:00,000 --> 00:00:01,800\n"), `${dl.suggestedFilename()} | ${srtText.slice(0, 50)}`);
   await page.getByRole("button", { name: /내려받기/ }).click();
-  const [dl2] = await Promise.all([page.waitForEvent("download"), page.getByRole("menuitem", { name: /일정/ }).click()]);
+  const [dl2] = await Promise.all([page.waitForEvent("download"), page.getByRole("menuitem", { name: /\.ics/ }).click()]);
   const icsAll = fs.readFileSync(await dl2.path(), "utf8");
   check("ICS 전체: 파일명 .ics, VEVENT 2건, KST 시간대", dl2.suggestedFilename().endsWith(".ics") && (icsAll.match(/BEGIN:VEVENT/g) || []).length === 2 && icsAll.includes("DTSTART;TZID=Asia/Seoul:20261110T150000"), dl2.suggestedFilename());
   await page.getByRole("button", { name: /내려받기/ }).click();
-  const [dl3] = await Promise.all([page.waitForEvent("download"), page.getByRole("menuitem", { name: /회의록/ }).first().click()]);
+  const [dl3] = await Promise.all([page.waitForEvent("download"), page.getByRole("menuitem", { name: /\.md/ }).click()]);
   const md = fs.readFileSync(await dl3.path(), "utf8");
   check("Markdown: 제목·일정 표·대화록", md.startsWith("# 주간 회의 통합 회의록") && md.includes("## 일정") && md.includes("2026-11-10 (화)"));
   await page.getByRole("button", { name: /내려받기/ }).click();
-  const [dl4] = await Promise.all([page.waitForEvent("download"), page.getByRole("menuitem", { name: /전체 데이터/ }).click()]);
+  const [dl4] = await Promise.all([page.waitForEvent("download"), page.getByRole("menuitem", { name: /\.json/ }).click()]);
   check("JSON: 파싱 가능", !!JSON.parse(fs.readFileSync(await dl4.path(), "utf8")).summary);
+  // Word 문서 저장: 헤더의 'Word로 저장' 버튼 + 메뉴의 '대화록 포함' 버전
+  const zipEntry = (file, name) => execFileSync("unzip", ["-p", file, name]).toString();
+  const [dlw] = await Promise.all([page.waitForEvent("download"), page.getByRole("link", { name: "Word로 저장" }).click()]);
+  const wPath = await dlw.path();
+  check("Word로 저장: 한글 파일명 .docx, ZIP(PK)", dlw.suggestedFilename() === "주간 회의 통합 회의록.docx" && fs.readFileSync(wPath).subarray(0, 2).toString() === "PK", dlw.suggestedFilename());
+  const wDoc = zipEntry(wPath, "word/document.xml");
+  check("Word 본문에 제목·일정 날짜/시간·액션 아이템 (대화록 부록은 없음)", ["주간 회의 통합 회의록", "2026-11-10 (화)", "15:00", "QA 체크리스트 작성"].every((t) => wDoc.includes(t)) && !wDoc.includes("부록. 대화록"));
+  await page.getByRole("button", { name: /내려받기/ }).click();
+  const [dlw2] = await Promise.all([page.waitForEvent("download"), page.getByRole("menuitem", { name: /회의록 \+ 대화록 \(Word\)/ }).click()]);
+  const wDoc2 = zipEntry(await dlw2.path(), "word/document.xml");
+  check("메뉴 '회의록 + 대화록 (Word)': 파일명에 (대화록 포함), 부록 포함", dlw2.suggestedFilename() === "주간 회의 통합 회의록 (대화록 포함).docx" && wDoc2.includes("부록. 대화록") && wDoc2.includes("[00:00:00]"), dlw2.suggestedFilename());
   await page.getByRole("button", { name: /내려받기/ }).click();
   await page.getByRole("menuitem", { name: /회의록 복사/ }).click();
   await page.waitForTimeout(300);
@@ -221,6 +232,8 @@ const overflow = (page) => page.evaluate(() => document.documentElement.scrollWi
   check("모바일 결과(요약 탭) 가로 스크롤 없음", (await overflow(mp)) <= 1, String(await overflow(mp)));
   const tabH = (await mp.getByRole("tab").first().boundingBox()).height;
   check("탭 높이 ≥ 44px", tabH >= 44, String(tabH));
+  const wbtn = await mp.getByRole("link", { name: "Word로 저장" }).boundingBox();
+  check("모바일: 'Word로 저장' 버튼이 화면 안에 보이고 높이 ≥ 44px", wbtn && wbtn.x >= 0 && wbtn.x + wbtn.width <= 390 && wbtn.height >= 44, JSON.stringify(wbtn));
   check("요약 탭: 한눈에 보기 보임 / 일정·대화록은 숨김", (await mp.getByRole("heading", { name: "한눈에 보기" }).isVisible()) && !(await mp.getByRole("heading", { name: /^일정/ }).isVisible()) && !(await mp.getByRole("heading", { name: /^대화록/ }).isVisible()));
   const player = await mp.locator("audio").boundingBox();
   check("하단 고정 플레이어가 화면 안에 보임", player && player.y + player.height <= 844 && player.y > 500, JSON.stringify(player));

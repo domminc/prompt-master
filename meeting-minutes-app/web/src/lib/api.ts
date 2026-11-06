@@ -41,7 +41,9 @@ export const api = {
   getJob: (id: string) => request<JobDto>("GET", `/api/jobs/${id}`),
   retry: (id: string) => request<JobDto>("POST", `/api/jobs/${id}/retry`),
   remove: (id: string) => request<{ ok: true }>("DELETE", `/api/jobs/${id}`),
-  exportUrl: (id: string, format: ExportFormat) => `/api/jobs/${id}/export?format=${format}`,
+  /** transcript: Word 에서 부록으로 전체 대화록을 붙일지 */
+  exportUrl: (id: string, format: ExportFormat, opts?: { transcript?: boolean }) =>
+    `/api/jobs/${id}/export?format=${format}${opts?.transcript ? "&transcript=1" : ""}`,
   mediaUrl: (id: string) => `/api/jobs/${id}/media`,
   async exportText(id: string, format: ExportFormat): Promise<string> {
     const res = await fetch(api.exportUrl(id, format));

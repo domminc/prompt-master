@@ -2,7 +2,9 @@ import { AwsClient } from "aws4fetch";
 import type { Env } from "./env";
 
 export const audioKey = (jobId: string) => `uploads/${jobId}/audio.mp3`;
-export const exportKey = (jobId: string, ext: string) => `exports/${jobId}/meeting.${ext}`;
+/** variant: 같은 형식의 다른 버전(예: 대화록 포함 Word)을 따로 캐시하기 위한 접미사 */
+export const exportKey = (jobId: string, ext: string, variant?: string) =>
+  `exports/${jobId}/meeting${variant ? `-${variant}` : ""}.${ext}`;
 
 /**
  * 브라우저가 R2 에 직접 올리려면 S3 호환 presigned URL 이 필요하다.

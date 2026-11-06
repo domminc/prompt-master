@@ -106,3 +106,20 @@ export function googleCalendarUrl(
   if (ev.location) p.set("location", ev.location);
   return `https://calendar.google.com/calendar/render?${p.toString()}`;
 }
+
+/** "2026-11-06" → "2026년 11월 6일 (금)" */
+export function formatKoreanDate(ymd: string): string {
+  const [y, m, d] = ymd.split("-").map(Number) as [number, number, number];
+  return `${y}년 ${m}월 ${d}일 (${weekdayKo(ymd)})`;
+}
+
+/**
+ * 일정의 시간 표기: 종일 / "15:00" / "15:00 ~ 16:00".
+ * 종료 시각 언급이 없으면 시작 시각만 보여 준다 (캘린더에는 1시간으로 들어가지만 화면·문서에서 지어내 보이지 않는다).
+ */
+export function eventTimeLabel(ev: TimingInput): string | null {
+  const t = eventTiming(ev);
+  if (!t) return ev.time;
+  if (t.allDay) return "종일";
+  return ev.endTime && ev.endTime > t.startTime ? `${t.startTime} ~ ${t.endTime}` : t.startTime;
+}

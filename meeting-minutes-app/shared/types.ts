@@ -55,5 +55,5 @@ export interface ApiErrorBody {
   error: string;
 }
 
-export const EXPORT_FORMATS = ["srt", "txt", "md", "json", "ics"] as const;
+export const EXPORT_FORMATS = ["docx", "srt", "txt", "md", "json", "ics"] as const;
 export type ExportFormat = (typeof EXPORT_FORMATS)[number];

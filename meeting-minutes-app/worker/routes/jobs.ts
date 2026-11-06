@@ -4,6 +4,7 @@ import { STALE_AFTER_MS } from "../../shared/limits";
 import { claimRetry, deleteJob, failIfStale, failJob, getJob, getSegments } from "../db";
 import { ApiError } from "../lib/errors";
 import { buildIcs } from "../../shared/ics";
+import { toDocx } from "../lib/docx-export";
 import {
   contentDisposition, safeBaseName, toJson, toMarkdown, toSrt, toTxt, type ExportJob,
 } from "../lib/exporters";
@@ -92,6 +93,7 @@ jobs.get("/:id/media", async (c) => {
 });
 
 const CONTENT_TYPES: Record<ExportFormat, string> = {
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   srt: "application/x-subrip; charset=utf-8",
   txt: "text/plain; charset=utf-8",
   md: "text/markdown; charset=utf-8",
@@ -99,7 +101,8 @@ const CONTENT_TYPES: Record<ExportFormat, string> = {
   ics: "text/calendar; charset=utf-8",
 };
 
-// 내보내기: srt / txt / md / json / ics. 처음 요청 때 만들어 R2(exports/{id}/)에 캐시한다.
+// 내보내기: docx / srt / txt / md / json / ics. 처음 요청 때 만들어 R2(exports/{id}/)에 캐시한다.
+//  - docx 는 ?transcript=1 이면 부록으로 전체 대화록을 붙인 버전(별도 캐시)
 jobs.get("/:id/export", async (c) => {
   const sql = c.var.sql!;
   const id = parseJobId(c.req.param("id"));
@@ -111,11 +114,14 @@ jobs.get("/:id/export", async (c) => {
   if (!job) throw new ApiError(404, "작업을 찾을 수 없습니다");
   if (job.status !== "completed" || !job.summary) throw new ApiError(409, "아직 처리 중이에요. 완료된 뒤에 내려받을 수 있어요");
 
-  const key = exportKey(id, format);
-  let text: string;
+  const withTranscript = format === "docx" && ["1", "true"].includes(c.req.query("transcript") ?? "");
+  const key = exportKey(id, format, withTranscript ? "full" : undefined);
+  const binary = format === "docx";
+
+  let body: string | Uint8Array;
   const cached = await c.env.BUCKET.get(key);
   if (cached) {
-    text = await cached.text();
+    body = binary ? new Uint8Array(await cached.arrayBuffer()) : await cached.text();
   } else {
     const exportJob: ExportJob = {
       id: job.id,
@@ -126,17 +132,19 @@ jobs.get("/:id/export", async (c) => {
       segments: await getSegments(sql, id),
       summary: job.summary,
     };
-    text =
-      format === "srt" ? toSrt(exportJob.segments)
+    body =
+      format === "docx" ? await toDocx(exportJob, { includeTranscript: withTranscript })
+      : format === "srt" ? toSrt(exportJob.segments)
       : format === "txt" ? toTxt(exportJob)
       : format === "md" ? toMarkdown(exportJob)
       : format === "json" ? toJson(exportJob)
       : buildIcs(job.summary.events, { calendarName: `${job.summary.title} 일정`, uidPrefix: id, meetingTitle: job.summary.title });
-    c.executionCtx.waitUntil(c.env.BUCKET.put(key, text, { httpMetadata: { contentType: CONTENT_TYPES[format] } }));
+    c.executionCtx.waitUntil(c.env.BUCKET.put(key, body, { httpMetadata: { contentType: CONTENT_TYPES[format] } }));
   }
 
-  const filename = `${safeBaseName(job.summary.title || job.fileName)}.${format}`;
-  return new Response(text, {
+  const suffix = withTranscript ? " (대화록 포함)" : "";
+  const filename = `${safeBaseName(job.summary.title || job.fileName)}${suffix}.${format}`;
+  return new Response(body, {
     headers: {
       "Content-Type": CONTENT_TYPES[format],
       "Content-Disposition": contentDisposition(filename),
